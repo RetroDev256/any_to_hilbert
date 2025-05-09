@@ -157,7 +157,7 @@ fn decodeDataLength(rgb_data: []const u8, side_pow: u6) !usize {
         const mapped_idx = mapped_pixel * 3 + channel;
         const byte = rgb_data[mapped_idx];
 
-        if (byte == 0xFF) return data_end;
+        if (byte != 0) return data_end;
         if (data_end == 0) return error.InvalidData;
         data_end -= 1;
     }
