@@ -1,0 +1,12 @@
+.{
+    .name = .any_to_hilbert,
+    .version = "0.0.0",
+    .fingerprint = 0xc8958742377b9136,
+    .minimum_zig_version = "0.15.0-dev.471+369177f0b",
+    .dependencies = .{},
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}
