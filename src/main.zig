@@ -47,33 +47,33 @@ fn failUsage(program: []const u8) noreturn {
     std.process.exit(1);
 }
 
-fn readInput(gpa: Allocator, input_file: []const u8) ![]const u8 {
-    const in_file = try std.fs.cwd().openFile(input_file, .{});
-    defer in_file.close();
-    return try in_file.readToEndAlloc(gpa, std.math.maxInt(usize));
-}
-
 pub fn main() !void {
     const gpa = std.heap.smp_allocator;
     const args = try std.process.argsAlloc(gpa);
     defer std.process.argsFree(gpa, args);
     const options = try parseArgs(args);
 
-    const in_data = try readInput(gpa, options.input);
-    defer gpa.free(in_data);
+    const in_file = try std.fs.cwd().openFile(options.input, .{});
+    defer in_file.close();
 
     const out_file = try std.fs.cwd().createFile(options.output, .{});
     defer out_file.close();
 
     switch (options.mode) {
-        .encode => try encode(gpa, in_data, out_file),
-        .decode => try decode(in_data, out_file),
+        .encode => try encode(gpa, in_file, out_file),
+        .decode => try decode(gpa, in_file, out_file),
     }
 }
 
-fn encode(gpa: Allocator, in_data: []const u8, out_file: std.fs.File) !void {
+fn encode(gpa: Allocator, in_file: std.fs.File, out_file: std.fs.File) !void {
+    const input_stat = try in_file.stat();
+    const input_len: usize = @intCast(input_stat.size);
+
+    var br = std.io.bufferedReader(in_file.reader());
+    const reader = br.reader();
+
     // Compute size of output image, include extra byte for marking the end
-    const pixel_count: usize = (in_data.len / 3) + 1;
+    const pixel_count: usize = (input_len / 3) + 1;
     const sqrt_pixels = @sqrt(@as(f64, @floatFromInt(pixel_count)));
     const side_pow: u6 = @intFromFloat(@ceil(@log2(sqrt_pixels)));
     const side = @as(usize, 1) << side_pow;
@@ -85,13 +85,13 @@ fn encode(gpa: Allocator, in_data: []const u8, out_file: std.fs.File) !void {
     @memset(grid, 0);
 
     // Place each value at the correct location in the buffer
-    for (0..in_data.len) |idx| {
+    for (0..input_len) |idx| {
         const mapped_idx = mapPixelHilbert(idx, side_pow);
-        grid[mapped_idx] = in_data[idx];
+        grid[mapped_idx] = try reader.readByte();
     }
 
     // Add a trailing 0xFF to mark where the file ends
-    const mapped_idx = mapPixelHilbert(in_data.len, side_pow);
+    const mapped_idx = mapPixelHilbert(input_len, side_pow);
     grid[mapped_idx] = 0xFF;
 
     // Encode as a PPM
@@ -147,13 +147,15 @@ fn decodeDataLength(rgb_data: []const u8, side_pow: u6) !usize {
     }
 }
 
-fn decode(in_data: []const u8, out_file: std.fs.File) !void {
+fn decode(gpa: Allocator, in_file: std.fs.File, out_file: std.fs.File) !void {
+    const in_data = try in_file.readToEndAlloc(gpa, std.math.maxInt(usize));
+    defer gpa.free(in_data);
+
     const ppm: PPM = try .parse(in_data);
     if (ppm.height != ppm.width) return error.InvalidData;
     if (@popCount(ppm.width) != 1) return error.InvalidData;
 
-    const file_writer = out_file.writer();
-    var bw = std.io.bufferedWriter(file_writer);
+    var bw = std.io.bufferedWriter(out_file.writer());
     const writer = bw.writer();
 
     const side_pow: u6 = @intCast(@bitSizeOf(usize) - 1 - @clz(ppm.width));
