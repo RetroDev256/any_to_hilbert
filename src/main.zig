@@ -77,21 +77,33 @@ fn encode(gpa: Allocator, in_file: std.fs.File, out_file: std.fs.File) !void {
     const sqrt_pixels = @sqrt(@as(f64, @floatFromInt(pixel_count)));
     const side_pow: u6 = @intFromFloat(@ceil(@log2(sqrt_pixels)));
     const side = @as(usize, 1) << side_pow;
-    const area = side * side;
 
     // multiply by 3 for RGB
-    const grid = try gpa.alloc(u8, 3 * area);
+    const grid = try gpa.alloc(u8, 3 * side * side);
     defer gpa.free(grid);
     @memset(grid, 0);
 
     // Place each value at the correct location in the buffer
-    for (0..input_len) |idx| {
-        const mapped_idx = mapPixelHilbert(idx, side_pow);
-        grid[mapped_idx] = try reader.readByte();
+    var idx: usize = 0;
+    while (idx < input_len) {
+        const pixel: usize = idx / 3;
+        const mapped_pixel = mapHilbert(side_pow, pixel);
+
+        var channel: usize = 0;
+        while (channel < 3 and idx < input_len) {
+            const mapped_idx = mapped_pixel * 3 + channel;
+            grid[mapped_idx] = try reader.readByte();
+
+            channel += 1;
+            idx += 1;
+        }
     }
 
     // Add a trailing 0xFF to mark where the file ends
-    const mapped_idx = mapPixelHilbert(input_len, side_pow);
+    const pixel = input_len / 3;
+    const channel = input_len % 3;
+    const mapped_pixel = mapHilbert(side_pow, pixel);
+    const mapped_idx = mapped_pixel * 3 + channel;
     grid[mapped_idx] = 0xFF;
 
     // Encode as a PPM
@@ -105,7 +117,7 @@ const PPM = struct {
     rgb_data: []const u8,
 
     pub fn parse(data: []const u8) !PPM {
-        var toker = std.mem.tokenizeAny(u8, data, &std.ascii.whitespace);
+        var toker = std.mem.splitAny(u8, data, &std.ascii.whitespace);
 
         // Parse the P6 PPM magic bytes
         const pnm_type = toker.next() orelse return error.InvalidPPM;
@@ -138,7 +150,10 @@ fn decodeDataLength(rgb_data: []const u8, side_pow: u6) !usize {
 
     var data_end: usize = rgb_data.len - 1;
     while (true) {
-        const mapped_idx = mapPixelHilbert(data_end, side_pow);
+        const pixel = data_end / 3;
+        const channel = data_end % 3;
+        const mapped_pixel = mapHilbert(side_pow, pixel);
+        const mapped_idx = mapped_pixel * 3 + channel;
         const byte = rgb_data[mapped_idx];
 
         if (byte == 0xFF) return data_end;
@@ -161,20 +176,23 @@ fn decode(gpa: Allocator, in_file: std.fs.File, out_file: std.fs.File) !void {
     const side_pow: u6 = @intCast(@bitSizeOf(usize) - 1 - @clz(ppm.width));
     const data_length = try decodeDataLength(ppm.rgb_data, side_pow);
 
-    for (0..data_length) |idx| {
-        const mapped_idx = mapPixelHilbert(idx, side_pow);
-        const byte = ppm.rgb_data[mapped_idx];
-        try writer.writeByte(byte);
+    var idx: usize = 0;
+    while (idx < data_length) {
+        const pixel: usize = idx / 3;
+        const mapped_pixel = mapHilbert(side_pow, pixel);
+
+        var channel: usize = 0;
+        while (channel < 3 and idx < data_length) {
+            const mapped_idx = mapped_pixel * 3 + channel;
+            const byte = ppm.rgb_data[mapped_idx];
+            try writer.writeByte(byte);
+
+            channel += 1;
+            idx += 1;
+        }
     }
 
     try bw.flush();
-}
-
-fn mapPixelHilbert(byte_idx: usize, side_pow: u6) usize {
-    const pixel_idx = byte_idx / 3;
-    const channel = byte_idx % 3;
-    const mapped_pixel = mapHilbert(side_pow, pixel_idx);
-    return mapped_pixel * 3 + channel;
 }
 
 // side_pow: grid is 2^side_pow by 2^side_pow
