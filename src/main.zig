@@ -117,6 +117,8 @@ const PPM = struct {
     rgb_data: []const u8,
 
     pub fn parse(data: []const u8) !PPM {
+        // TODO: better parsing, supporting comments
+
         var toker = std.mem.splitAny(u8, data, &std.ascii.whitespace);
 
         // Parse the P6 PPM magic bytes
@@ -139,7 +141,6 @@ const PPM = struct {
 
         // Ensure the data is as long as the header says it is
         const rgb_data = toker.rest();
-        if (rgb_data.len != width * height * 3) return error.InvalidPPM;
 
         return .{ .width = width, .height = height, .rgb_data = rgb_data };
     }
