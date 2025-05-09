@@ -168,10 +168,10 @@ fn decode(in_data: []const u8, out_file: std.fs.File) !void {
     try bw.flush();
 }
 
-fn mapPixelHilbert(pixel_idx: usize, side_pow: u6) usize {
-    const pixel = pixel_idx / 3;
-    const channel = pixel_idx % 3;
-    const mapped_pixel = mapHilbert(side_pow, pixel);
+fn mapPixelHilbert(byte_idx: usize, side_pow: u6) usize {
+    const pixel_idx = byte_idx / 3;
+    const channel = byte_idx % 3;
+    const mapped_pixel = mapHilbert(side_pow, pixel_idx);
     return mapped_pixel * 3 + channel;
 }
 
