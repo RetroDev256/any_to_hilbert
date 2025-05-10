@@ -1,0 +1,1 @@
+This is a simple binary data visualizer. It will map the bytes of a file to a PPM image with a hilbert curve of RGB values. It can be useful for checking for high/low regions of entropy in file, or visualizing file structure easily.
